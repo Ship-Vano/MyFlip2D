@@ -19,6 +19,38 @@ void FluidSolver::integrateParticles(float dt, float g) {
     }
 }
 
+void FluidSolver::handleParticleCollisions(){
+    float minX = h + particleRadius;
+    float maxX = (numX - 1)*h - particleRadius;
+    float minY = h + particleRadius;
+    float maxY = (numY - 1)*h - particleRadius;
+    //wall collisions:
+    for(int i = 0; i < numParticles; ++i){
+        float x = particlePos[2*i];
+        float y = particlePos[2*i + 1];
+
+        if(x < minX){
+            x = minX;
+            particleVel[2*i] = 0.0;
+        }
+        if(x > maxX){
+            x = maxX;
+            particleVel[2*i] = 0.0;
+        }
+        if(y < minY){
+            y = minY;
+            particleVel[2*i + 1] = 0.0;
+        }
+        if(y > maxY){
+            y = maxY;
+            particleVel[2*i+1] = 0.0;
+        }
+
+        particlePos[2*i] = x;
+        particlePos[2*i+1] = y;
+    }
+}
+
 void FluidSolver::transferVelocitiesToGrid() {
     int n = numY;
     float h1 = h_inv;
@@ -236,6 +268,7 @@ void FluidSolver::runFrameSimulation(const float dt, const float g, const float 
 
     for(int step = 0; step < numSubSteps; ++step){
         integrateParticles(dt, g);
+        handleParticleCollisions();
         transferVelocitiesToGrid();
         makeIncompressible(numPressureIters, sdt);
         transferVelocitiesToParticles(flipCoef);
