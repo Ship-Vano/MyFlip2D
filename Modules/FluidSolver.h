@@ -65,7 +65,7 @@ public:
     FluidSolver(const float dens, const float width, const float height, const float h_step,
                 const float particleRadius, const int maxParticles);
     void setUpParticlesAndCells(const int particleAmount, std::vector<float> particlePositions);
-    void runSimulaotion(const float dt, const float g, const float flipCoef, const int numFrames,
+    void runSimulation(const float dt, const float g, const float flipCoef, const int numFrames,
                        const int numPressureIters, const int numParticleIters,
                        const std::string outputFileName);
 };
