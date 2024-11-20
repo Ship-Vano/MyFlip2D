@@ -408,7 +408,7 @@ void FluidSolver::runFrameSimulation(const float dt, const float g, const float 
         pushParticlesApart(numParticleIters);
         handleParticleCollisions();
         transferVelocitiesToGrid();
-        updateParticleDensity();
+        //updateParticleDensity();
         makeIncompressible(numPressureIters, sdt);
         transferVelocitiesToParticles(flipCoef);
     }
