@@ -56,6 +56,7 @@ class FluidSolver {
     void setupSimulation();
     void integrateParticles(float dt, float g);
     void handleParticleCollisions();
+    void pushParticlesApart(const int numIters);
     void transferVelocitiesToGrid();
     void makeIncompressible(const int numIters, const float dt, const float overRelaxation = 1.1);
     void transferVelocitiesToParticles(const float flipCoef);

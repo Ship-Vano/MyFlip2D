@@ -36,7 +36,7 @@ int main() {
 
     solver.setUpParticlesAndCells(maxSimParticles, particlePositions);
 
-    solver.runSimulation(dt, gravity, flipCoef, 100,
-                        numPressureIters, numParticleIters, "/home/ship/Coding/MyFlip2D/MyFlip2D/OutputData/res.txt");
+    solver.runSimulation(dt, gravity, flipCoef, 10,
+                        numPressureIters, numParticleIters, "./OutputData/res.txt");
     return 0;
 }
