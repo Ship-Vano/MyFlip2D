@@ -1,0 +1,20 @@
+[
+{
+  "directory": "/home/ship/Coding/MyFlip2D/MyFlip2D/build",
+  "command": "/usr/bin/g++   -g -o CMakeFiles/MyFlip2D.dir/main.cpp.o -c /home/ship/Coding/MyFlip2D/MyFlip2D/main.cpp",
+  "file": "/home/ship/Coding/MyFlip2D/MyFlip2D/main.cpp",
+  "output": "CMakeFiles/MyFlip2D.dir/main.cpp.o"
+},
+{
+  "directory": "/home/ship/Coding/MyFlip2D/MyFlip2D/build",
+  "command": "/usr/bin/g++   -g -o CMakeFiles/MyFlip2D.dir/Modules/FluidSolver.cpp.o -c /home/ship/Coding/MyFlip2D/MyFlip2D/Modules/FluidSolver.cpp",
+  "file": "/home/ship/Coding/MyFlip2D/MyFlip2D/Modules/FluidSolver.cpp",
+  "output": "CMakeFiles/MyFlip2D.dir/Modules/FluidSolver.cpp.o"
+},
+{
+  "directory": "/home/ship/Coding/MyFlip2D/MyFlip2D/build",
+  "command": "/usr/bin/g++   -g -o CMakeFiles/MyFlip2D.dir/Modules/Utility.cpp.o -c /home/ship/Coding/MyFlip2D/MyFlip2D/Modules/Utility.cpp",
+  "file": "/home/ship/Coding/MyFlip2D/MyFlip2D/Modules/Utility.cpp",
+  "output": "CMakeFiles/MyFlip2D.dir/Modules/Utility.cpp.o"
+}
+]

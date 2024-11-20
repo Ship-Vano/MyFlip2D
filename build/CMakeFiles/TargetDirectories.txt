@@ -1,0 +1,3 @@
+/home/ship/Coding/MyFlip2D/MyFlip2D/build/CMakeFiles/MyFlip2D.dir
+/home/ship/Coding/MyFlip2D/MyFlip2D/build/CMakeFiles/edit_cache.dir
+/home/ship/Coding/MyFlip2D/MyFlip2D/build/CMakeFiles/rebuild_cache.dir
