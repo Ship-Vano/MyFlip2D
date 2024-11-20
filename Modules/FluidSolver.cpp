@@ -54,14 +54,15 @@ void FluidSolver::handleParticleCollisions(){
 void FluidSolver::pushParticlesApart(const int numIters){
     
     std::fill(numCellParticles.begin(), numCellParticles.end(), 0);
+
     // вычисляем количество частиц в каждой ячейке
     for(int i = 0; i < numParticles; ++i){
         float x = particlePos[2*i];
         float y = particlePos[2*i + 1];
-        int xi = clamp(static_cast<int>(std::floor(x * h_inv)), 0, pNumX-1);
-        int yi = clamp(static_cast<int>(std::floor(y * h_inv)), 0, pNumY-1);
+        int xi = clamp(static_cast<int>(std::floor(x * pInvSpacing)), 0, pNumX-1);
+        int yi = clamp(static_cast<int>(std::floor(y * pInvSpacing)), 0, pNumY-1);
         int cellNr = xi * pNumY + yi;
-        ++numCellParticles[cellNr];
+        numCellParticles[cellNr]++;
     }
 
     // // заполняем ячейки частицами
@@ -78,8 +79,8 @@ void FluidSolver::pushParticlesApart(const int numIters){
     for(int i = 0; i < numParticles; ++i){
         float x = particlePos[2*i];
         float y = particlePos[2*i + 1];
-        int xi = clamp(static_cast<int>(std::floor(x * h_inv)), 0, pNumX-1);
-        int yi = clamp(static_cast<int>(std::floor(y * h_inv)), 0, pNumY-1);
+        int xi = clamp(static_cast<int>(std::floor(x * pInvSpacing)), 0, pNumX-1);
+        int yi = clamp(static_cast<int>(std::floor(y * pInvSpacing)), 0, pNumY-1);
         int cellNr = xi * pNumY + yi;
         firstCellParticle[cellNr]--;
         cellParticleIds[firstCellParticle[cellNr]] = i;
@@ -87,7 +88,7 @@ void FluidSolver::pushParticlesApart(const int numIters){
 
     // Оттаклкиваем частицы друг от друга
 
-    float minDist = 2.0 * particleRadius;
+    float minDist = 2.0f * particleRadius;
     float minDist2 = minDist * minDist;
 
     for (int iter = 0; iter < numIters; ++iter) {
@@ -118,11 +119,11 @@ void FluidSolver::pushParticlesApart(const int numIters){
                         float dx = qx - px;
                         float dy = qy - py;
                         float d2 = dx * dx + dy * dy;
-                        if (d2 > minDist2 || d2 == 0.0){
+                        if (d2 > minDist2 || d2 == 0.0f){
                             continue;
                         }
                         float d = std::sqrt(d2);
-                        float s = 0.5 * (minDist - d) / d;
+                        float s = 0.5f * (minDist - d) / d;
                         dx *= s;
                         dy *= s;
                         particlePos[2 * i] -= dx;
@@ -292,7 +293,9 @@ void FluidSolver::transferVelocitiesToParticles(const float flipCoef) {
 void FluidSolver::updateParticleDensity(){
     int n = numY;
     float h2 = 0.5 * h;
-    std::fill(particleDens.begin(), particleDens.end(), 0.0);
+
+    std::vector<float> d(particleDens);
+    std::fill(d.begin(), d.end(), 0.0);
 
     for(int i = 0; i < numParticles; ++i){
         float x = particlePos[2 * i];
@@ -312,10 +315,10 @@ void FluidSolver::updateParticleDensity(){
         float sx = 1.0-tx;
         float sy = 1.0-ty;
 
-        if(x0 < numX && y0 < numY) particleDens[x0*n + y0] = sx*sy;
-        if(x1 < numX && y0 < numY) particleDens[x1*n + y0] = tx*sy;
-        if(x1 < numX && y1 < numY) particleDens[x1*n + y1] = tx*ty;
-        if(x0 < numX && y1 < numY) particleDens[x0*n + y1] = sx*ty;
+        if(x0 < numX && y0 < numY) d[x0*n + y0] = sx*sy;
+        if(x1 < numX && y0 < numY) d[x1*n + y0] = tx*sy;
+        if(x1 < numX && y1 < numY) d[x1*n + y1] = tx*ty;
+        if(x0 < numX && y1 < numY) d[x0*n + y1] = sx*ty;
     }
 
     if(particleRestDensity == 0.0){
@@ -324,7 +327,7 @@ void FluidSolver::updateParticleDensity(){
 
         for(int i = 0; i < numCells; ++i){
             if(cellType[i] == FLUID_CELL){
-                sum += particleDens[i];
+                sum += d[i];
                 numFLuidCells++;
             }
         }
@@ -333,6 +336,8 @@ void FluidSolver::updateParticleDensity(){
             particleRestDensity = sum / numFLuidCells;
         }
     }
+
+    particleDens = d;
 }
 
 void FluidSolver::makeIncompressible(const int numIters, const float dt, const float overRelaxation) {
@@ -380,7 +385,7 @@ void FluidSolver::makeIncompressible(const int numIters, const float dt, const f
                 }
 
                 float p_val = - div / s_sum;
-                p_val *= overRelaxation; //разобраться с overRelaxation, а затем использовать
+                //p_val *= overRelaxation; //разобраться с overRelaxation, а затем использовать
                 p[center] = cp * p_val;
 
                 u[center] -= sx0 * p_val;
@@ -395,7 +400,7 @@ void FluidSolver::makeIncompressible(const int numIters, const float dt, const f
 void FluidSolver::runFrameSimulation(const float dt, const float g, const float flipCoef,
                                 const int numPressureIters,
                                 const int numParticleIters) {
-    int numSubSteps = 1;
+    int numSubSteps = 2;
     float sdt = dt / static_cast<float>(numSubSteps);
 
     for(int step = 0; step < numSubSteps; ++step){
@@ -414,24 +419,24 @@ FluidSolver::FluidSolver(const float dens, const float width, const float height
                          density(dens), maxParticles(maxParticles), particleRadius(particleRadius){
 
     numX = static_cast<int>(std::floor(width / h_step)) + 1;
-    numY = static_cast<int>(std::floor(width / h_step)) + 1;
+    numY = static_cast<int>(std::floor(height / h_step)) + 1;
     h = std::max(width / static_cast<float>(numX), height / static_cast<float>(numY));
-    h_inv = static_cast<float>(1.0) / h;
+    h_inv = static_cast<float>(1.0f) / h;
     numCells = numX * numY;
 
-    u = std::vector<float>(numCells, 0.0);
-    v = std::vector<float>(numCells, 0.0);
-    du = std::vector<float>(numCells, 0.0);
-    dv = std::vector<float>(numCells, 0.0);
-    u_prev = std::vector<float>(numCells, 0.0);
-    v_prev = std::vector<float>(numCells, 0.0);
-    p = std::vector<float>(numCells, 0.0);
-    s = std::vector<float>(numCells, 0.0);
+    u = std::vector<float>(numCells, 0.0f);
+    v = std::vector<float>(numCells, 0.0f);
+    du = std::vector<float>(numCells, 0.0f);
+    dv = std::vector<float>(numCells, 0.0f);
+    u_prev = std::vector<float>(numCells, 0.0f);
+    v_prev = std::vector<float>(numCells, 0.0f);
+    p = std::vector<float>(numCells, 0.0f);
+    s = std::vector<float>(numCells, 0.0f);
     cellType = std::vector<int>(numCells, 0);
 
-    particlePos = std::vector<float>(2 * maxParticles, 0.0);
-    particleVel = std::vector<float>(2 * maxParticles, 0.0);
-    particleDens= std::vector<float>(numCells, 0.0);
+    particlePos = std::vector<float>(2 * maxParticles, 0.0f);
+    particleVel = std::vector<float>(2 * maxParticles, 0.0f);
+    particleDens= std::vector<float>(numCells, 0.0f);
     particleRestDensity = 0.0;
 
     pInvSpacing = 1.0 / (2.2 * particleRadius);
@@ -444,13 +449,6 @@ FluidSolver::FluidSolver(const float dens, const float width, const float height
     cellParticleIds = std::vector<int>(maxParticles, 0);
 
     numParticles = 0;
-
-    //cellColor =std::vector<float>(3*numCells, 0.0);
-    //particleColor std::vector<float>(3 * maxParticles, 0.0);
-    /*
-     * for (int i = 0; i < maxParticles; ++i)
-				particleColor[3 * i + 2] = 1.0;
-     * */
 
 }
 
@@ -474,7 +472,7 @@ void FluidSolver::setUpParticlesAndCells(const int particleAmount, std::vector<f
 void FluidSolver::runSimulation(const float dt, const float g, const float flipCoef, const int numFrames,
                                 const int numPressureIters, const int numParticleIters,
                                 const std::string outputFileName) {
-    std::fstream file(outputFileName);
+    std::ofstream file(outputFileName);
     assert(file.is_open());
     for(int frame = 0; frame < numFrames; ++frame){
         runFrameSimulation(dt, g, flipCoef, numPressureIters, numParticleIters);

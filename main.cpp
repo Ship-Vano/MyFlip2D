@@ -3,9 +3,9 @@
 int main() {
     float gravity = -9.81;
     float dt = 1.0 / 60.0;
-    float flipCoef = 1.0;
-    int numPressureIters = 50;
-    int numParticleIters = 3;
+    float flipCoef = 0.5;
+    int numPressureIters = 100;
+    int numParticleIters = 2;
     //float overRelaxation = 1.9;
     float simHeight = 2.0;
     float simWidth = 2.0;
@@ -13,7 +13,7 @@ int main() {
     float hh = simHeight / resolution;
     float rho = 1000.0;
     float relWaterHeight = 0.8;
-    float relWaterWidth = 0.8;
+    float relWaterWidth = 0.6;
     float partRadius = 0.3 * hh;
     float dx = 2.0 * partRadius;
     float dy = std::sqrt(3.0)/2.0 * dx;
@@ -36,7 +36,7 @@ int main() {
 
     solver.setUpParticlesAndCells(maxSimParticles, particlePositions);
 
-    solver.runSimulation(dt, gravity, flipCoef, 120,
+    solver.runSimulation(dt, gravity, flipCoef, 360,
                         numPressureIters, numParticleIters, "/home/ship/Coding/MyFlip2D/MyFlip2D/OutputData/res.txt");
     return 0;
 }

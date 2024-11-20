@@ -32,7 +32,7 @@ DT clamp(const DT x, const DT min, const DT max) {
     return x;
 }
 template <typename DT>
-void writeVectorToFile(std::fstream& file, std::vector<DT> v) {
+void writeVectorToFile(std::ofstream& file, std::vector<DT> v) {
     for (int i = 0; i < v.size(); ++i)
         file << std::setprecision(16) << v[i] << " ";
     file << " " << std::endl;
