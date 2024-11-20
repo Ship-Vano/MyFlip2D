@@ -3,12 +3,12 @@
 int main() {
     float gravity = -9.81;
     float dt = 1.0 / 60.0;
-    float flipCoef = 0.9;
+    float flipCoef = 1.0;
     int numPressureIters = 50;
-    int numParticleIters = 2;
+    int numParticleIters = 3;
     //float overRelaxation = 1.9;
-    float simHeight = 3.0;
-    float simWidth = 3.0;
+    float simHeight = 2.0;
+    float simWidth = 2.0;
     float resolution = 100.0;
     float hh = simHeight / resolution;
     float rho = 1000.0;
@@ -36,7 +36,7 @@ int main() {
 
     solver.setUpParticlesAndCells(maxSimParticles, particlePositions);
 
-    solver.runSimulation(dt, gravity, flipCoef, 10,
-                        numPressureIters, numParticleIters, "./OutputData/res.txt");
+    solver.runSimulation(dt, gravity, flipCoef, 120,
+                        numPressureIters, numParticleIters, "/home/ship/Coding/MyFlip2D/MyFlip2D/OutputData/res.txt");
     return 0;
 }
