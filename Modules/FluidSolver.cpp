@@ -13,13 +13,14 @@
 
 void FluidSolver::integrateParticles(float dt, float g) {
     for(int i = 0; i < numParticles; ++i){
-        particleVel[2 * i + 1] += dt * g;
-        particlePos[2 * i] += particleVel[2 * i] * dt;
-        particlePos[2 * i + 1] += particleVel[2 * i + 1]*dt;
+        particleVel[2 * i + 1] += dt * g; //добавляем гравитацию
+        particlePos[2 * i] += particleVel[2 * i] * dt; // перенос по x
+        particlePos[2 * i + 1] += particleVel[2 * i + 1]*dt; // перенос по y
     }
 }
 
 void FluidSolver::handleParticleCollisions(){
+    /*проверяем выход положения частицы за границу и применяем г.у.*/
     float minX = h + particleRadius;
     float maxX = (numX - 1)*h - particleRadius;
     float minY = h + particleRadius;
@@ -168,7 +169,7 @@ void FluidSolver::transferVelocitiesToGrid() {
         }
     }
 
-    // цикл по двум компонентам: u и v
+    // цикл по двум компонентам: u и v (сначала для u всё смотрим, потом для v)
     for(int comp = 0; comp < 2; ++comp){
         float dx = comp == 0 ? 0.0 : h2;
         float dy = comp == 0? h2 : 0.0;
@@ -178,12 +179,12 @@ void FluidSolver::transferVelocitiesToGrid() {
         std::vector<float> d = comp == 0 ? du : dv;
 
         for(int i = 0; i < numParticles; ++i){
-            float x = clamp(particlePos[2 * i], h, static_cast<float>(numX - 1) * h);
-            float y = clamp(particlePos[2 * i + 1], h, static_cast<float>(numY - 1) * h);
+            float x = clamp(particlePos[2 * i], h, static_cast<float>(numX - 1) * h); // тк слева и справа твёрдая граница (м.б. исправить это)
+            float y = clamp(particlePos[2 * i + 1], h, static_cast<float>(numY - 1) * h); // тк сверху и снизу твёрдые границы
 
-            int x0 = std::min(static_cast<int>(std::floor((x - dx) * h1)), numX - 2);
-            float tx =  ((x - dx) - static_cast<float>(x0) * h) * h1;
-            int x1 = std::min(x0 + 1, numX - 2);
+            int x0 = std::min(static_cast<int>(std::floor((x - dx) * h1)), numX - 2); // делаем сдвиг на h/2 влево и получаем номер стобца сетки
+            float tx =  ((x - dx) - static_cast<float>(x0) * h) * h1; // барицентр координата по x
+            int x1 = std::min(x0 + 1, numX - 2);    //индекс следующего столбца
 
             int y0 = std::min(static_cast<int>(std::floor((y - dy) * h1)), numY - 2);
             float ty =  ((y - dy) - static_cast<float>(y0) * h) * h1;
@@ -197,11 +198,13 @@ void FluidSolver::transferVelocitiesToGrid() {
             float d2 = tx*ty;
             float d3 = sx*ty;
 
+            // индексы для массивов сеточных значений
             int nr0 = x0 * n + y0;
             int nr1 = x1 * n + y0;
             int nr2 = x1 * n + y1;
             int nr3 = x0 * n + y1;
 
+            // интерполяция компоненты скорости на сетку (без деления на сумму весов
             float pv = particleVel[2 * i + comp];
             f[nr0] += pv * d0; d[nr0] += d0;
             f[nr1] += pv * d1; d[nr1] += d1;
@@ -209,13 +212,14 @@ void FluidSolver::transferVelocitiesToGrid() {
             f[nr3] += pv * d3; d[nr3] += d3;
         }
 
+        // завершение интерполяции (нормировка на сумму весов)
         for(int i = 0; i < numX; ++i){
             if(d[i] > 0.0){
                 f[i] /= d[i];
             }
         }
 
-        // восстанавливаем "твёрдые" (solid) ячейки
+        // восстанавливаем "твёрдые" (solid) ячейки (скорости в них не изменяются)
         for (int i = 0; i < numX; ++i) {
             for (int j = 0; j < numY; ++j) {
                 bool isSolid = cellType[i * n + j] == SOLID_CELL;
@@ -284,7 +288,7 @@ void FluidSolver::transferVelocitiesToParticles(const float flipCoef) {
                             + valid2 * d2 * (f[nr2] - f_prev[nr2]) + valid3 * d3 * (f[nr3] - f_prev[nr3])) / d;
                 float flipV = v + corr;
 
-                particleVel[2 * i + comp] = (1.0 - flipCoef) * picV + flipCoef * flipV;
+                particleVel[2 * i + comp] = (1.0 - flipCoef) * picV + flipCoef * (particleVel[2 * i + comp] + flipV);
 			}
         }
     }

@@ -7,8 +7,8 @@ int main() {
     int numPressureIters = 100;
     int numParticleIters = 2;
     //float overRelaxation = 1.9;
-    float simHeight = 2.0;
-    float simWidth = 2.0;
+    float simHeight = 720;
+    float simWidth = 1280;
     float resolution = 100.0;
     float hh = simHeight / resolution;
     float rho = 1000.0;
@@ -36,7 +36,7 @@ int main() {
 
     solver.setUpParticlesAndCells(maxSimParticles, particlePositions);
 
-    solver.runSimulation(dt, gravity, flipCoef, 360,
-                        numPressureIters, numParticleIters, "/home/ship/Coding/MyFlip2D/MyFlip2D/OutputData/res.txt");
+    solver.runSimulation(dt, gravity, flipCoef, 720,
+                        numPressureIters, numParticleIters, "OutputData/res.txt");
     return 0;
 }

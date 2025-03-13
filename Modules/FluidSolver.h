@@ -10,6 +10,15 @@
 #include <cmath>
 #include <cassert>
 
+
+struct Particle{
+    float x;
+    float y;
+    float u;
+    float v;
+    //TODO: add affine C for APIC
+};
+
 class FluidSolver {
 
     float density;
@@ -35,6 +44,7 @@ class FluidSolver {
 
     // частицы
     int maxParticles;
+    std::vector<Particle> particles;
     std::vector<float> particlePos; //2*maxParticles; //x1,y1, x2,y2, x3,y3, .....
     //std::vector<float> particleColor; //3*maxParticles; //r1,g1,b1, r2,g2,b2, ....
     std::vector<float> particleVel; //2*maxParticles; //u1,v1, u2,v2, u3,v3, ...
