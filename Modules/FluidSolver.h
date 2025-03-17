@@ -64,6 +64,7 @@ class FluidSolver {
     int numParticles; //=0
 
     void setupSimulation();
+    void relabel();
     void integrateParticles(float dt, float g);
     void handleParticleCollisions();
     void pushParticlesApart(const int numIters);

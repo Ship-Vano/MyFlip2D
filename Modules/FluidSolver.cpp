@@ -408,13 +408,14 @@ void FluidSolver::runFrameSimulation(const float dt, const float g, const float 
     float sdt = dt / static_cast<float>(numSubSteps);
 
     for(int step = 0; step < numSubSteps; ++step){
-        integrateParticles(sdt, g);
-        pushParticlesApart(numParticleIters);
-        handleParticleCollisions();
-        transferVelocitiesToGrid();
+        relabel();
+        transferVelocitiesToGrid(); //P2G
         //updateParticleDensity();
         makeIncompressible(numPressureIters, sdt);
         transferVelocitiesToParticles(flipCoef);
+        integrateParticles(sdt, g);
+        pushParticlesApart(numParticleIters);
+        handleParticleCollisions();
     }
 }
 
@@ -486,3 +487,26 @@ void FluidSolver::runSimulation(const float dt, const float g, const float flipC
 }
 
 
+void FluidSolver::relabel(){
+
+    //очищаем все метки кроме твёрдых границ
+    for(int i = 0; i < numCells; ++i){
+        if(cellType[i] != SOLID_CELL){
+            cellType[i] = AIR_CELL;
+        }
+    }
+
+    //помечаем "жидкие"
+    for(int i = 0; i < numParticles; ++i){
+
+        // получаем номер ячейки частицы
+        float x = particlePos[2 * i];
+        float y = particlePos[2 * i + 1];
+        int xi = clamp( static_cast<int>(std::floor(x / h)), 0, numX - 1 );
+        int yi = clamp( static_cast<int>(std::floor(y / h)), 0, numY - 1 );
+        int cellNr = xi * numX + yi;
+
+        //помечаем её как жидкую
+        cellType[cellNr] = FLUID_CELL;
+    }
+}
