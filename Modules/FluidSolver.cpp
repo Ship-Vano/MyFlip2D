@@ -13,7 +13,7 @@
 
 void FluidSolver::integrateParticles(float dt, float g) {
     for(int i = 0; i < numParticles; ++i){
-        particleVel[2 * i + 1] += dt * g; //добавляем гравитацию
+//        particleVel[2 * i + 1] += dt * g; //добавляем гравитацию
         particlePos[2 * i] += particleVel[2 * i] * dt; // перенос по x
         particlePos[2 * i + 1] += particleVel[2 * i + 1]*dt; // перенос по y
     }
@@ -417,8 +417,8 @@ void FluidSolver::runFrameSimulation(const float dt, const float g, const float 
         //makeIncompressible(numPressureIters, sdt);
         transferVelocitiesToParticles(flipCoef);
         integrateParticles(sdt, g);
-        //pushParticlesApart(numParticleIters);
-        //handleParticleCollisions();
+        pushParticlesApart(numParticleIters);
+        handleParticleCollisions();
     }
 }
 
