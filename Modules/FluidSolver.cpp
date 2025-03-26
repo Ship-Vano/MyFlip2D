@@ -716,10 +716,40 @@ void FluidSolver::pressureSolve(const float dt) {
     // начинаем главный итерационный процесс (критерий оставнова - достигнутая точность)
     bool converged = false;
     int PCG_MAX_ITERS = 10000;
+    double PCG_TOL = 1e-3;
     for(int iters=0; iters < PCG_MAX_ITERS; ++iters){
+        applyA(z, s, Adiag, Ax, Ay);
+        double alpha = sigma / dot(z, s, numX, numY);
 
+        // обновляем давление и невязку
+        for(int i = 0; i < numX; ++i){
+            for(int j = 0; j < numY; ++j){
+                pressure[i*numX + j] += (alpha * s[i*numX + j]);
+                r[i*numX + j] -= (alpha * z[i*numX + j]);
+            }
+        }
+        // критерий останова
+        if(max(r, numX, numY) <= PCG_TOL){
+            converged = true;
+            break;
+        }
+        // иначе - новый вспомогательный вектор
+        applyPrecon(z, r, precon, Adiag, Ax, Ay);
+        double newSigma = dot(z, r, numX, numY);
+        double beta = newSigma / sigma;
+        //обновляем вектор поиска
+        for(int i =0; i < numX; ++i){
+            for(int j = 0; j < numY; ++j){
+                s[i*numX + j] = z[i*numX + j] + (beta * s[i*numX + j]);
+            }
+        }
+        //обьновляем sigma
+        sigma = newSigma;
     }
 
+    if (!converged) {
+        std::cout << "PCG did not converge, stopped after " << PCG_MAX_ITERS << " iterations!\n";
+    }
 }
 
 void FluidSolver::applyPrecon(std::vector<double>& z, std::vector<double>& r, std::vector<double>& precon, std::vector<double>& Adiag,  std::vector<double>& Ax, std::vector<double>& Ay){
@@ -788,8 +818,28 @@ void FluidSolver::applyPrecon(std::vector<double>& z, std::vector<double>& r, st
     }
 }
 
-void FluidSolver::applyPressure() {
+void FluidSolver::applyA(std::vector<double>& z,std::vector<double>& s, std::vector<double>& Adiag, std::vector<double>& Ax, std::vector<double>& Ay){
+    z.resize(numCells, 0.0);
+    for(int i=0; i<numX; ++i){
+        for(int j=0; j<numY; ++j){
+            if(isFluid(i,j)){
+                z[i*numX + j] = Adiag[i*numX + j] * s[i*numX + j]
+                                + Ax[i*numX + j] * s[(i + 1)*numX + j]
+                                + Ay[i*numX+j] * s[i*numX + (j + 1)];
+                if (i - 1 >= 0 && i - 1 < numX) {
+                    z[i*numX + j] += Ax[(i - 1)*numX + j] * s[(i - 1)*numX +j];
+                }
+                if (j - 1 >= 0 && j - 1 < numY) {
+                    z[i*numX + j] += Ay[i*numX + (j - 1)] * s[i*numX + (j - 1)];
+                }
+            }
+        }
+    }
 
+}
+
+void FluidSolver::applyPressure() {
+    //TODO
 }
 
 /**

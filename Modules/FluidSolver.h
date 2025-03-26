@@ -75,7 +75,9 @@ class FluidSolver {
     void pressureSolve(const float dt);
     void applyPrecon(std::vector<double>& z, std::vector<double>& r, std::vector<double>& precon, std::vector<double>& Adiag,  std::vector<double>& Ax, std::vector<double>& Ay);
     void applyPressure();
-    bool isFluid(int i, int j);
+    void applyA(std::vector<double>& z,std::vector<double>& s, std::vector<double>& Adiag, std::vector<double>& Ax, std::vector<double>& Ay);
+
+        bool isFluid(int i, int j);
     void applyBodyForces(const float dt, const float g);
     void makeIncompressible(const int numIters, const float dt, const float overRelaxation = 1.9);
     void transferVelocitiesToParticles(const float flipCoef);

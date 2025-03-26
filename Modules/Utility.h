@@ -9,6 +9,7 @@
 #include <iostream>
 #include <iomanip>
 #include <vector>
+#include <limits>
 
 enum CELL_TYPE{
     FLUID_CELL = 0,
@@ -48,6 +49,20 @@ double dot(const std::vector<T>& grid1, const std::vector<T>& grid2, const int s
     }
 
     return dotProd;
+}
+
+template <typename T>
+T max(std::vector<T> grid1, int size_x, int size_y) {
+    T maxVal = std::numeric_limits<T>::lowest();
+    for (int i = 0; i < size_x; i++) {
+        for (int j = 0; j < size_y; j++) {
+            if (grid1[i*size_x + j] > maxVal) {
+                maxVal = grid1[i*size_x + j];
+            }
+        }
+    }
+
+    return maxVal;
 }
 
 #endif //MYFLIP2D_UTILITY_H
