@@ -410,12 +410,13 @@ void FluidSolver::runFrameSimulation(const float dt, const float g, const float 
     for(int step = 0; step < numSubSteps; ++step){
         relabel();
         transferVelocitiesToGrid(); //P2G
+        applyBodyForces(dt, g);
         //updateParticleDensity();
-        makeIncompressible(numPressureIters, sdt);
-        transferVelocitiesToParticles(flipCoef);
-        integrateParticles(sdt, g);
-        pushParticlesApart(numParticleIters);
-        handleParticleCollisions();
+        //makeIncompressible(numPressureIters, sdt);
+        //transferVelocitiesToParticles(flipCoef);
+        //integrateParticles(sdt, g);
+        //pushParticlesApart(numParticleIters);
+        //handleParticleCollisions();
     }
 }
 
@@ -509,4 +510,321 @@ void FluidSolver::relabel(){
         //помечаем её как жидкую
         cellType[cellNr] = FLUID_CELL;
     }
+}
+
+void FluidSolver::applyBodyForces(const float dt, const float g){
+    /*Приложим действие гравитационных сил к каждой компоненте скорости сетки*/
+    //явный метод Эйлера
+    for(int i = 0; i < numX; ++i){
+        for(int j=0; j < numY; ++j){
+            //u[i * pNumX + j] += 0.0; += dt*GRAVITY.X
+            v[i * numX + j] += dt * g;
+        }
+    }
+}
+
+void FluidSolver::pressureSolve(const float dt) {
+
+    //здесь используем double для большей точности (мб поменять на float и не выпендриваться...)
+
+    //инициализация правой части системы
+    // считаем -div(/vec{v})
+    std::vector<double> rhs(numCells, 0.0);
+    double scale = 1.0f/h;
+    for(int i=0; i < numX; ++i){
+        for(int j=0; j < numY; ++j){
+            if(isFluid(i,j)){
+                rhs[i * numX + j] = -scale * (u[(i+1)*numX + j] - u[i*numX + j] + v[i*numX + j + 1] - v[i*numX + j]);
+                //если попали на границу, то надо рассматривать скорость твёрдой поверхности
+                //TODO: создать сетку скоростей твёрдых тел u_solid и v_solid (сейчас просто по нулям она)
+                if(cellType[(i-1)*numX + j] == SOLID_CELL){
+                    rhs[i * numX + j] -= scale * (u[i*numX + j] - 0.0f); //u_solid[i*numX + j]
+                }
+                if(cellType[(i+1)*numX + j] == SOLID_CELL){
+                    rhs[i * numX + j] += scale * (u[(i+1)*numX + j] - 0.0f); //u_solid[(i+1)*numX + j]
+                }
+                if(cellType[i*numX + j - 1] == SOLID_CELL){
+                    rhs[i * numX + j] -= scale * (v[i*numX + j] - 0.0f); //v_solid[i*numX + j]
+                }
+                if(cellType[i*numX + j + 1] == SOLID_CELL){
+                    rhs[i * numX + j] += scale * (v[i*numX + j + 1] - 0.0f); //v_solid[i*numX + j + 1]
+                }
+
+            }
+        }
+    }
+    // конец инициализации правой части системы
+
+    // собираем матрицу системы
+    /*  Создаем матрицу A для расчета давления в системе. Это разреженная матрица коэффициентов
+        для значений давления, хранящихся в 3 отдельных ячейках. Если индекс i, j, k не является ячейкой для жидкости, то
+        он равен 0,0 во всех 3 ячейках, в которых хранится матрица.
+        Аргументы:
+        Adiag - сетка для хранения диагонали матрицы.
+        Ax - сетка для хранения коэффициентов давления в ячейке (i+1) для каждой ячейки сетки с индексом по x = i
+        Ay - сетка для хранения коэффициентов давления в ячейке (j+1) для каждой ячейки сетки с индексом по y = j
+     * */
+    std::vector<double> Adiag(numCells, 0.0);
+    std::vector<double> Ax(numCells, 0.0);
+    std::vector<double> Ay(numCells, 0.0);
+
+    // заполняем коэффициентами при неизвестных
+    scale = dt / (density * h * h);
+    for(int i = 0; i < numX; ++i){
+        for(int j=0; j < numY; ++j){
+            if(isFluid(i,j)){
+                // сосед слева
+                if(cellType[(i-1)*numX + j] == FLUID_CELL || cellType[(i-1)*numX + j] == AIR_CELL){
+                    Adiag[i * numX + j] += scale;
+                }
+
+                //сосед справа
+                if(cellType[(i+1)*numX + j] == FLUID_CELL){
+                    Adiag[i*numX + j] += scale;
+                    Ax[i * numX + j] -= scale;
+                } else if(cellType[(i+1)*numX + j] == AIR_CELL){
+                    Adiag[i*numX + j] += scale;
+                }
+                //сосед снизу
+                if(cellType[i*numX + (j-1)] == FLUID_CELL || cellType[i*numX + (j-1)] == AIR_CELL){
+                    Adiag[i*numX + j] += scale;
+                }
+                //сосед сверху
+                if(cellType[i*numX + j+1] == FLUID_CELL){
+                    Adiag[i*numX + j] += scale;
+                    Ay[i * numX + j] -= scale;
+                } else if(cellType[i*numX + j+1] == AIR_CELL){
+                    Adiag[i*numX + j] += scale;
+                }
+            }
+        }
+    }
+    // конец сборки матрицы
+
+    // предобуславливаем матрицу
+    /*
+     * Создаем предобуславливатель, используемый при выполнении предобуславливаемого сопряженного градиента (PCG)
+        алгоритм для вычисления давления.
+        Args:
+        precon - сетка для хранения предобуславливателя
+        Adiag, Ax, Ay - сетки, составляющие матрицу коэффициентов A
+     * */
+    std::vector<double> precon(numCells, 0.0);
+    // tuning constant
+    double tau = 0.97;
+    // коэф-т запаса
+    double sigma = 0.25;
+
+    for(int i = 0; i < numX; ++i){
+        for(int j = 0; j < numY; ++j){
+            if(isFluid(i, j)){
+                double Adiag_ij = Adiag[i*numX + j];
+                double Ax_im1j = 0.0;
+                double Ax_ijm1 = 0.0;
+                double Ay_ijm1 = 0.0;
+                double Ay_im1j = 0.0;
+                double precon_im1j = 0.0;
+                double precon_ijm1 = 0.0;
+                // при выходе за пределы сетки хотим оставаться в нуле
+                // все коэф-ты для нежидких ячеек уже по нулям в матрице A
+                if(i - 1 >= 0 && i - 1 < numX){
+                    if(isFluid(i-1, j)){
+                        Ax_im1j = Ax[(i-1)*numX + j];
+                        Ay_im1j = Ay[(i-1)*numX + j];
+                        precon_im1j = precon[(i-1)*numX + j];
+                    }
+                }
+                if(j-1 >= 0 && j-1 < numY){
+                    if(isFluid(i, j-1)){
+                        Ax_ijm1 = Ax[i * numX + (j-1)];
+                        Ay_ijm1 = Ay[i * numX + (j-1)];
+                        precon_ijm1 = precon[i * numX + (j-1)];
+                    }
+                }
+
+                double e = Adiag_ij - (Ax_im1j * precon_im1j * Ax_im1j * precon_im1j)\
+                            - (Ay_ijm1 * precon_ijm1 * Ay_ijm1 * precon_ijm1) \
+                            - tau*(
+                                    Ax_im1j * Ay_im1j * std::pow(precon_im1j, 2.0)\
+                                    + Ay_ijm1 * Ax_ijm1 * std::pow(precon_ijm1, 2.0)\
+                                    );
+                if (e < (sigma * Adiag_ij)) {
+                    e = Adiag_ij;
+                }
+
+
+                precon[i * numX + j] = 1.0 / std::sqrt(e);
+            }
+        }
+    }
+    // конец сборки предобуславливания
+
+    // метод сопряжённых градиентов (pcg)
+    /*Выполняет модифицированный алгоритм с нулевым уровнем неполного сопряженного градиента Холецкого
+    (предварительно обусловленный сопряженный градиент) для решения линейной системы
+    Ap = b для p. Результаты отображаются в таблице значений давления.
+     * */
+
+    // очищаем давления до нуля
+    pressure.resize(numCells);
+    std::fill(pressure.begin(), pressure.end(), 0.0f);
+
+    // невязка на старте итерационного метода - это правая часть
+    std::vector<double> r(numCells, 0.0);
+    for(int i=0; i < numX; ++i){
+        for(int j=0; j<numY; ++j){
+            r[i*numX + j] = rhs[i*numX + j];
+        }
+    }
+
+    // проверяем невязку на нуль
+    bool r0 = true;
+    for(int i=0; i < numX; ++i){
+        for(int j=0; j<numY; ++j){
+            if(r[i*numX + j] != 0){
+                r0 = false;
+                break;
+            }
+        }
+    }
+
+    if(r0){
+        std::cout << "Did not run PCG:  0 residual on the start.\n";
+        return;
+    }
+
+    // вспомогательный вектор
+    std::vector<double> z(numCells, 0.0);
+
+    // вектор для поиска
+    std::vector<double> s(numCells, 0.0);
+
+    // инициализация вспомогательных s и z
+    applyPrecon(z, r, precon, Adiag, Ax, Ay);
+
+    // для старта инициализируем s так же, как и z:
+    for(int i =0; i < numX; ++i){
+        for(int j = 0; j , numY; ++j){
+            s[i*numX+ j] = z[i*numX + j];
+        }
+    }
+
+    // конец инициализации вспомогательных s и z
+
+    sigma = dot(z, r, numX, numY);
+
+    // начинаем главный итерационный процесс (критерий оставнова - достигнутая точность)
+    bool converged = false;
+    int PCG_MAX_ITERS = 10000;
+    for(int iters=0; iters < PCG_MAX_ITERS; ++iters){
+
+    }
+
+}
+
+void FluidSolver::applyPrecon(std::vector<double>& z, std::vector<double>& r, std::vector<double>& precon, std::vector<double>& Adiag,  std::vector<double>& Ax, std::vector<double>& Ay){
+    // решаем систему Lq = r
+    std::vector<double> q(numCells, 0.0);
+    for(int i = 0; i < numX; ++i){
+        for(int j = 0; j < numY; ++j){
+            if(isFluid(i,j)){
+                double Ax_im1j = 0.0;
+                double Ay_ijm1 = 0.0;
+                double precon_im1j = 0.0;
+                double precon_ijm1 = 0.0;
+                double q_im1j = 0.0;
+                double q_ijm1 = 0.0;
+
+                if(i - 1 >= 0 && i - 1 < numX){
+                    if(isFluid(i-1, j)){
+                        Ax_im1j = Ax[(i-1)*numX + j];
+                        precon_im1j = precon[(i-1)*numX + j];
+                        q_im1j = q[(i-1)*numX + j];
+                    }
+                }
+                if(j-1 >= 0 && j-1 < numY){
+                    if(isFluid(i, j-1)){
+                        Ay_ijm1 = Ay[i * numX + (j-1)];
+                        precon_ijm1 = precon[i * numX + (j-1)];
+                        q_ijm1 = q[i*numX + (j-1)];
+                    }
+                }
+
+                double t = r[i*numX + j] - (Ax_im1j * precon_im1j * q_im1j)
+                           - (Ay_ijm1 * precon_ijm1 * q_ijm1);
+
+                q[i*numX + j] = t * precon[i*numX + j];
+            }
+        }
+    }
+
+    // теперь решаем L^T z = q
+    for (int i = numX - 1; i >= 0; i--) {
+        for (int j = numY-1; j >= 0; j--) {
+            if(isFluid(i, j)){
+                double Ax_ij = Ax[i*numX + j];
+                double Ay_ij = Ay[i*numX + j];
+                double precon_ij = precon[i*numX + j];
+                double z_ip1j = 0.0;
+                double z_ijp1 = 0.0;
+
+                if (i + 1 >= 0 && i + 1 < numX) {
+                    if (isFluid(i + 1, j)) {
+                        z_ip1j = z[(i + 1)*numX+j];
+                    }
+                }
+                if (j + 1 >= 0 && j + 1 < numY) {
+                    if (isFluid(i, j + 1)) {
+                        z_ijp1 = z[i*numX + (j + 1)];
+                    }
+                }
+
+                double t = q[i*numX + j] - (Ax_ij * precon_ij * z_ip1j)
+                           - (Ay_ij * precon_ij * z_ijp1);
+
+                z[i * numX + j] = t * precon_ij;
+            }
+        }
+    }
+}
+
+void FluidSolver::applyPressure() {
+
+}
+
+/**
+ * Определяет, считается ли данная ячейка сетки жидкостью на основе сетки меток. Также
+    учитываются компоненты скорости на краю сетки. Например, если переданный индекс находится на
+    единицу ниже сетки меток, предполагается, что это индекс компонента скорости, и является ли вызов
+    плавным или нет, определяется по вызову, с которым он граничит. В противном случае возвращается значение false.
+    Аргументы
+    индексы ячейки:
+    i - по x
+    j - по y
+ * */
+bool FluidSolver::isFluid(int i, int j) {
+    bool isFluid = false;
+    //проверка скорости в углу сетки
+    // если попали в угол, то надо предыдущий чекать
+    if(i == numX || j == numY){
+        // i и j не должны выходить за пределы
+        if(i == numX && j == numY){
+            isFluid = false;
+        }
+        else if(i == numX){
+            if(cellType[(i-1) * numX + j] == FLUID_CELL){
+                isFluid = true;
+            }
+        }
+        else if(j == numY){
+            if(cellType[i * numX + j - 1] == FLUID_CELL){
+                isFluid = true;
+            }
+        }
+    }
+    else if(cellType[i * numX + j] == FLUID_CELL){
+        isFluid = true;
+    }
+
+    return isFluid;
 }

@@ -40,6 +40,8 @@ class FluidSolver {
     std::vector<float> p;//size = numCellss
     std::vector<float> s;//size = numCellss
     std::vector<int> cellType;//size = numCellss
+    std::vector<float> pressure; // size=numCells
+    //std::vector<float> densities; //size = numCells
     //std::vector<int> cellColor; //3*NumCells
 
     // частицы
@@ -70,6 +72,11 @@ class FluidSolver {
     void pushParticlesApart(const int numIters);
     void transferVelocitiesToGrid();
     void updateParticleDensity();
+    void pressureSolve(const float dt);
+    void applyPrecon(std::vector<double>& z, std::vector<double>& r, std::vector<double>& precon, std::vector<double>& Adiag,  std::vector<double>& Ax, std::vector<double>& Ay);
+    void applyPressure();
+    bool isFluid(int i, int j);
+    void applyBodyForces(const float dt, const float g);
     void makeIncompressible(const int numIters, const float dt, const float overRelaxation = 1.9);
     void transferVelocitiesToParticles(const float flipCoef);
     void runFrameSimulation(const float dt, const float g, const float flipCoef,

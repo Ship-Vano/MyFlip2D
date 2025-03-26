@@ -38,5 +38,16 @@ void writeVectorToFile(std::ofstream& file, std::vector<DT> v) {
     file << " " << std::endl;
 }
 
+template <typename T>
+double dot(const std::vector<T>& grid1, const std::vector<T>& grid2, const int size_x, const int size_y) {
+    double dotProd = 0.0;
+    for (int i = 0; i < size_x; ++i) {
+        for (int j = 0; j < size_y; ++j) {
+            dotProd += grid1[i * size_x + j] * grid2[i * size_x + j];
+        }
+    }
+
+    return dotProd;
+}
 
 #endif //MYFLIP2D_UTILITY_H
