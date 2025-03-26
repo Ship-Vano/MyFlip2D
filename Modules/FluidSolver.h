@@ -74,7 +74,7 @@ class FluidSolver {
     void updateParticleDensity();
     void pressureSolve(const float dt);
     void applyPrecon(std::vector<double>& z, std::vector<double>& r, std::vector<double>& precon, std::vector<double>& Adiag,  std::vector<double>& Ax, std::vector<double>& Ay);
-    void applyPressure();
+    void applyPressure(const float& dt);
     void applyA(std::vector<double>& z,std::vector<double>& s, std::vector<double>& Adiag, std::vector<double>& Ax, std::vector<double>& Ay);
 
         bool isFluid(int i, int j);

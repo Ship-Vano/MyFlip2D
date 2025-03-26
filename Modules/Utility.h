@@ -44,7 +44,7 @@ double dot(const std::vector<T>& grid1, const std::vector<T>& grid2, const int s
     double dotProd = 0.0;
     for (int i = 0; i < size_x; ++i) {
         for (int j = 0; j < size_y; ++j) {
-            dotProd += grid1[i * size_x + j] * grid2[i * size_x + j];
+            dotProd += grid1[i * size_y + j] * grid2[i * size_y + j];
         }
     }
 
@@ -56,8 +56,8 @@ T max(std::vector<T> grid1, int size_x, int size_y) {
     T maxVal = std::numeric_limits<T>::lowest();
     for (int i = 0; i < size_x; i++) {
         for (int j = 0; j < size_y; j++) {
-            if (grid1[i*size_x + j] > maxVal) {
-                maxVal = grid1[i*size_x + j];
+            if (grid1[i*size_y + j] > maxVal) {
+                maxVal = grid1[i*size_y + j];
             }
         }
     }

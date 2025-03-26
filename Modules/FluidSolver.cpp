@@ -411,10 +411,12 @@ void FluidSolver::runFrameSimulation(const float dt, const float g, const float 
         relabel();
         transferVelocitiesToGrid(); //P2G
         applyBodyForces(dt, g);
+        pressureSolve(dt);
+        applyPressure(dt);
         //updateParticleDensity();
         //makeIncompressible(numPressureIters, sdt);
-        //transferVelocitiesToParticles(flipCoef);
-        //integrateParticles(sdt, g);
+        transferVelocitiesToParticles(flipCoef);
+        integrateParticles(sdt, g);
         //pushParticlesApart(numParticleIters);
         //handleParticleCollisions();
     }
@@ -505,7 +507,7 @@ void FluidSolver::relabel(){
         float y = particlePos[2 * i + 1];
         int xi = clamp( static_cast<int>(std::floor(x / h)), 0, numX - 1 );
         int yi = clamp( static_cast<int>(std::floor(y / h)), 0, numY - 1 );
-        int cellNr = xi * numX + yi;
+        int cellNr = xi * numY + yi;
 
         //помечаем её как жидкую
         cellType[cellNr] = FLUID_CELL;
@@ -518,7 +520,7 @@ void FluidSolver::applyBodyForces(const float dt, const float g){
     for(int i = 0; i < numX; ++i){
         for(int j=0; j < numY; ++j){
             //u[i * pNumX + j] += 0.0; += dt*GRAVITY.X
-            v[i * numX + j] += dt * g;
+            v[i * numY + j] += dt * g;
         }
     }
 }
@@ -534,20 +536,20 @@ void FluidSolver::pressureSolve(const float dt) {
     for(int i=0; i < numX; ++i){
         for(int j=0; j < numY; ++j){
             if(isFluid(i,j)){
-                rhs[i * numX + j] = -scale * (u[(i+1)*numX + j] - u[i*numX + j] + v[i*numX + j + 1] - v[i*numX + j]);
+                rhs[i * numY + j] = -scale * (u[(i+1)*numY + j] - u[i*numY + j] + v[i*numY + j + 1] - v[i*numY + j]);
                 //если попали на границу, то надо рассматривать скорость твёрдой поверхности
                 //TODO: создать сетку скоростей твёрдых тел u_solid и v_solid (сейчас просто по нулям она)
-                if(cellType[(i-1)*numX + j] == SOLID_CELL){
-                    rhs[i * numX + j] -= scale * (u[i*numX + j] - 0.0f); //u_solid[i*numX + j]
+                if(cellType[(i-1)*numY + j] == SOLID_CELL){
+                    rhs[i * numY + j] -= scale * (u[i*numY + j] - 0.0f); //u_solid[i*numY + j]
                 }
-                if(cellType[(i+1)*numX + j] == SOLID_CELL){
-                    rhs[i * numX + j] += scale * (u[(i+1)*numX + j] - 0.0f); //u_solid[(i+1)*numX + j]
+                if(cellType[(i+1)*numY + j] == SOLID_CELL){
+                    rhs[i * numY + j] += scale * (u[(i+1)*numY + j] - 0.0f); //u_solid[(i+1)*numY + j]
                 }
-                if(cellType[i*numX + j - 1] == SOLID_CELL){
-                    rhs[i * numX + j] -= scale * (v[i*numX + j] - 0.0f); //v_solid[i*numX + j]
+                if(cellType[i*numY + j - 1] == SOLID_CELL){
+                    rhs[i * numY + j] -= scale * (v[i*numY + j] - 0.0f); //v_solid[i*numY + j]
                 }
-                if(cellType[i*numX + j + 1] == SOLID_CELL){
-                    rhs[i * numX + j] += scale * (v[i*numX + j + 1] - 0.0f); //v_solid[i*numX + j + 1]
+                if(cellType[i*numY + j + 1] == SOLID_CELL){
+                    rhs[i * numY + j] += scale * (v[i*numY + j + 1] - 0.0f); //v_solid[i*numY + j + 1]
                 }
 
             }
@@ -574,27 +576,27 @@ void FluidSolver::pressureSolve(const float dt) {
         for(int j=0; j < numY; ++j){
             if(isFluid(i,j)){
                 // сосед слева
-                if(cellType[(i-1)*numX + j] == FLUID_CELL || cellType[(i-1)*numX + j] == AIR_CELL){
-                    Adiag[i * numX + j] += scale;
+                if(cellType[(i-1)*numY + j] == FLUID_CELL || cellType[(i-1)*numY + j] == AIR_CELL){
+                    Adiag[i * numY + j] += scale;
                 }
 
                 //сосед справа
-                if(cellType[(i+1)*numX + j] == FLUID_CELL){
-                    Adiag[i*numX + j] += scale;
-                    Ax[i * numX + j] -= scale;
-                } else if(cellType[(i+1)*numX + j] == AIR_CELL){
-                    Adiag[i*numX + j] += scale;
+                if(cellType[(i+1)*numY + j] == FLUID_CELL){
+                    Adiag[i*numY + j] += scale;
+                    Ax[i * numY + j] -= scale;
+                } else if(cellType[(i+1)*numY + j] == AIR_CELL){
+                    Adiag[i*numY + j] += scale;
                 }
                 //сосед снизу
-                if(cellType[i*numX + (j-1)] == FLUID_CELL || cellType[i*numX + (j-1)] == AIR_CELL){
-                    Adiag[i*numX + j] += scale;
+                if(cellType[i*numY + (j-1)] == FLUID_CELL || cellType[i*numY + (j-1)] == AIR_CELL){
+                    Adiag[i*numY + j] += scale;
                 }
                 //сосед сверху
-                if(cellType[i*numX + j+1] == FLUID_CELL){
-                    Adiag[i*numX + j] += scale;
-                    Ay[i * numX + j] -= scale;
-                } else if(cellType[i*numX + j+1] == AIR_CELL){
-                    Adiag[i*numX + j] += scale;
+                if(cellType[i*numY + j+1] == FLUID_CELL){
+                    Adiag[i*numY + j] += scale;
+                    Ay[i * numY + j] -= scale;
+                } else if(cellType[i*numY + j+1] == AIR_CELL){
+                    Adiag[i*numY + j] += scale;
                 }
             }
         }
@@ -618,7 +620,7 @@ void FluidSolver::pressureSolve(const float dt) {
     for(int i = 0; i < numX; ++i){
         for(int j = 0; j < numY; ++j){
             if(isFluid(i, j)){
-                double Adiag_ij = Adiag[i*numX + j];
+                double Adiag_ij = Adiag[i*numY + j];
                 double Ax_im1j = 0.0;
                 double Ax_ijm1 = 0.0;
                 double Ay_ijm1 = 0.0;
@@ -629,16 +631,16 @@ void FluidSolver::pressureSolve(const float dt) {
                 // все коэф-ты для нежидких ячеек уже по нулям в матрице A
                 if(i - 1 >= 0 && i - 1 < numX){
                     if(isFluid(i-1, j)){
-                        Ax_im1j = Ax[(i-1)*numX + j];
-                        Ay_im1j = Ay[(i-1)*numX + j];
-                        precon_im1j = precon[(i-1)*numX + j];
+                        Ax_im1j = Ax[(i-1)*numY + j];
+                        Ay_im1j = Ay[(i-1)*numY + j];
+                        precon_im1j = precon[(i-1)*numY + j];
                     }
                 }
                 if(j-1 >= 0 && j-1 < numY){
                     if(isFluid(i, j-1)){
-                        Ax_ijm1 = Ax[i * numX + (j-1)];
-                        Ay_ijm1 = Ay[i * numX + (j-1)];
-                        precon_ijm1 = precon[i * numX + (j-1)];
+                        Ax_ijm1 = Ax[i * numY + (j-1)];
+                        Ay_ijm1 = Ay[i * numY + (j-1)];
+                        precon_ijm1 = precon[i * numY + (j-1)];
                     }
                 }
 
@@ -653,7 +655,7 @@ void FluidSolver::pressureSolve(const float dt) {
                 }
 
 
-                precon[i * numX + j] = 1.0 / std::sqrt(e);
+                precon[i * numY + j] = 1.0 / std::sqrt(e);
             }
         }
     }
@@ -673,7 +675,7 @@ void FluidSolver::pressureSolve(const float dt) {
     std::vector<double> r(numCells, 0.0);
     for(int i=0; i < numX; ++i){
         for(int j=0; j<numY; ++j){
-            r[i*numX + j] = rhs[i*numX + j];
+            r[i*numY + j] = rhs[i*numY + j];
         }
     }
 
@@ -681,7 +683,7 @@ void FluidSolver::pressureSolve(const float dt) {
     bool r0 = true;
     for(int i=0; i < numX; ++i){
         for(int j=0; j<numY; ++j){
-            if(r[i*numX + j] != 0){
+            if(r[i*numY + j] != 0){
                 r0 = false;
                 break;
             }
@@ -704,8 +706,8 @@ void FluidSolver::pressureSolve(const float dt) {
 
     // для старта инициализируем s так же, как и z:
     for(int i =0; i < numX; ++i){
-        for(int j = 0; j , numY; ++j){
-            s[i*numX+ j] = z[i*numX + j];
+        for(int j = 0; j < numY; ++j){
+            s[i*numY+ j] = z[i*numY + j];
         }
     }
 
@@ -724,8 +726,8 @@ void FluidSolver::pressureSolve(const float dt) {
         // обновляем давление и невязку
         for(int i = 0; i < numX; ++i){
             for(int j = 0; j < numY; ++j){
-                pressure[i*numX + j] += (alpha * s[i*numX + j]);
-                r[i*numX + j] -= (alpha * z[i*numX + j]);
+                pressure[i*numY + j] += (alpha * s[i*numY + j]);
+                r[i*numY + j] -= (alpha * z[i*numY + j]);
             }
         }
         // критерий останова
@@ -740,7 +742,7 @@ void FluidSolver::pressureSolve(const float dt) {
         //обновляем вектор поиска
         for(int i =0; i < numX; ++i){
             for(int j = 0; j < numY; ++j){
-                s[i*numX + j] = z[i*numX + j] + (beta * s[i*numX + j]);
+                s[i*numY + j] = z[i*numY + j] + (beta * s[i*numY + j]);
             }
         }
         //обьновляем sigma
@@ -767,23 +769,23 @@ void FluidSolver::applyPrecon(std::vector<double>& z, std::vector<double>& r, st
 
                 if(i - 1 >= 0 && i - 1 < numX){
                     if(isFluid(i-1, j)){
-                        Ax_im1j = Ax[(i-1)*numX + j];
-                        precon_im1j = precon[(i-1)*numX + j];
-                        q_im1j = q[(i-1)*numX + j];
+                        Ax_im1j = Ax[(i-1)*numY + j];
+                        precon_im1j = precon[(i-1)*numY + j];
+                        q_im1j = q[(i-1)*numY + j];
                     }
                 }
                 if(j-1 >= 0 && j-1 < numY){
                     if(isFluid(i, j-1)){
-                        Ay_ijm1 = Ay[i * numX + (j-1)];
-                        precon_ijm1 = precon[i * numX + (j-1)];
-                        q_ijm1 = q[i*numX + (j-1)];
+                        Ay_ijm1 = Ay[i * numY + (j-1)];
+                        precon_ijm1 = precon[i * numY + (j-1)];
+                        q_ijm1 = q[i*numY + (j-1)];
                     }
                 }
 
-                double t = r[i*numX + j] - (Ax_im1j * precon_im1j * q_im1j)
+                double t = r[i*numY + j] - (Ax_im1j * precon_im1j * q_im1j)
                            - (Ay_ijm1 * precon_ijm1 * q_ijm1);
 
-                q[i*numX + j] = t * precon[i*numX + j];
+                q[i*numY + j] = t * precon[i*numY + j];
             }
         }
     }
@@ -792,27 +794,27 @@ void FluidSolver::applyPrecon(std::vector<double>& z, std::vector<double>& r, st
     for (int i = numX - 1; i >= 0; i--) {
         for (int j = numY-1; j >= 0; j--) {
             if(isFluid(i, j)){
-                double Ax_ij = Ax[i*numX + j];
-                double Ay_ij = Ay[i*numX + j];
-                double precon_ij = precon[i*numX + j];
+                double Ax_ij = Ax[i*numY + j];
+                double Ay_ij = Ay[i*numY + j];
+                double precon_ij = precon[i*numY + j];
                 double z_ip1j = 0.0;
                 double z_ijp1 = 0.0;
 
                 if (i + 1 >= 0 && i + 1 < numX) {
                     if (isFluid(i + 1, j)) {
-                        z_ip1j = z[(i + 1)*numX+j];
+                        z_ip1j = z[(i + 1)*numY+j];
                     }
                 }
                 if (j + 1 >= 0 && j + 1 < numY) {
                     if (isFluid(i, j + 1)) {
-                        z_ijp1 = z[i*numX + (j + 1)];
+                        z_ijp1 = z[i*numY + (j + 1)];
                     }
                 }
 
-                double t = q[i*numX + j] - (Ax_ij * precon_ij * z_ip1j)
+                double t = q[i*numY + j] - (Ax_ij * precon_ij * z_ip1j)
                            - (Ay_ij * precon_ij * z_ijp1);
 
-                z[i * numX + j] = t * precon_ij;
+                z[i * numY + j] = t * precon_ij;
             }
         }
     }
@@ -823,14 +825,14 @@ void FluidSolver::applyA(std::vector<double>& z,std::vector<double>& s, std::vec
     for(int i=0; i<numX; ++i){
         for(int j=0; j<numY; ++j){
             if(isFluid(i,j)){
-                z[i*numX + j] = Adiag[i*numX + j] * s[i*numX + j]
-                                + Ax[i*numX + j] * s[(i + 1)*numX + j]
-                                + Ay[i*numX+j] * s[i*numX + (j + 1)];
+                z[i*numY + j] = Adiag[i*numY + j] * s[i*numY + j]
+                                + Ax[i*numY + j] * s[(i + 1)*numY + j]
+                                + Ay[i*numY+j] * s[i*numY + (j + 1)];
                 if (i - 1 >= 0 && i - 1 < numX) {
-                    z[i*numX + j] += Ax[(i - 1)*numX + j] * s[(i - 1)*numX +j];
+                    z[i*numY + j] += Ax[(i - 1)*numY + j] * s[(i - 1)*numY +j];
                 }
                 if (j - 1 >= 0 && j - 1 < numY) {
-                    z[i*numX + j] += Ay[i*numX + (j - 1)] * s[i*numX + (j - 1)];
+                    z[i*numY + j] += Ay[i*numY + (j - 1)] * s[i*numY + (j - 1)];
                 }
             }
         }
@@ -838,8 +840,51 @@ void FluidSolver::applyA(std::vector<double>& z,std::vector<double>& s, std::vec
 
 }
 
-void FluidSolver::applyPressure() {
+
+//приклоадываем силу давления к полю скоростей
+void FluidSolver::applyPressure(const float& dt) {
     //TODO
+    float scale = dt / (density  * h);
+    for(int i =0; i < numX; ++i){
+        for(int j =0; j < numY; ++j){
+
+            //u update
+            if(i-1 >= 0){
+                if(cellType[(i-1)*numY + j] == FLUID_CELL || cellType[i*numY + j] == FLUID_CELL){
+                    if(cellType[(i-1)*numY + j] == SOLID_CELL || cellType[i*numY + j] == SOLID_CELL){
+                        //TODO: add solid velocities
+                        u[i*numY + j] = 0.0f; // usolid[i][j]
+                    }else{
+                        u[i*numY+j] -= scale * (pressure[i*numY + j] - pressure[(i-1)*numY + j]);
+                    }
+                }
+                /*else{
+                 * u[i*numY + j] = VEL_UNKNOWN;
+                 * }
+                 * */
+            }else{
+                // край сетки - скорости не меняем
+            }
+
+            //v update
+            if(j-1 >= 0){
+                if(cellType[i*numY + (j-1)] == FLUID_CELL || cellType[i*numY + j] == FLUID_CELL){
+                  if(cellType[i*numY + (j-1)] == SOLID_CELL || cellType[i*numY + j] == FLUID_CELL){
+                      //TODO: add solid velocities
+                      v[i*numY + j] = 0.0f;
+                  } else{
+                      v[i*numY + j] -= scale * (pressure[i*numY + j] - pressure[i*numY + (j-1)]);
+                  }
+                }
+                /*else{
+                 * v[i*numY + j] = VEL_UNKNOWN;
+                 * }
+                 * */
+            }else{
+                // край - не меняем
+            }
+        }
+    }
 }
 
 /**
@@ -862,17 +907,17 @@ bool FluidSolver::isFluid(int i, int j) {
             isFluid = false;
         }
         else if(i == numX){
-            if(cellType[(i-1) * numX + j] == FLUID_CELL){
+            if(cellType[(i-1) * numY + j] == FLUID_CELL){
                 isFluid = true;
             }
         }
         else if(j == numY){
-            if(cellType[i * numX + j - 1] == FLUID_CELL){
+            if(cellType[i * numY + j - 1] == FLUID_CELL){
                 isFluid = true;
             }
         }
     }
-    else if(cellType[i * numX + j] == FLUID_CELL){
+    else if(cellType[i * numY + j] == FLUID_CELL){
         isFluid = true;
     }
 
