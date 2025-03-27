@@ -89,7 +89,7 @@ void FluidSolver::pushParticlesApart(const int numIters){
 
     // Оттаклкиваем частицы друг от друга
 
-    float minDist = 2.0f * particleRadius;
+    float minDist = 1.5f * particleRadius;
     float minDist2 = minDist * minDist;
 
     for (int iter = 0; iter < numIters; ++iter) {
@@ -154,7 +154,7 @@ void FluidSolver::transferVelocitiesToGrid() {
 
     // ОПРЕДЕЛЯЕМ ТИП ЯЧЕЙКИ
     for(int i = 0; i < numCells; ++i){
-        cellType[i] = s[i] == 0 ? SOLID_CELL : AIR_CELL;
+        cellType[i] = s_weight[i] == 0 ? SOLID_CELL : AIR_CELL;
     }
 
     // ЗАДАЁМ ЯЧЕЙКИ С ЖИДКОСТЬЮ
@@ -368,10 +368,10 @@ void FluidSolver::makeIncompressible(const int numIters, const float dt, const f
                 int bottom = i * n + j - 1; //i, (j-1
                 int top = i * n + j + 1; //i, (j+1)
 
-                float sx0 = s[left];
-                float sx1 = s[right];
-                float sy0 = s[bottom];
-                float sy1 = s[top];
+                float sx0 = s_weight[left];
+                float sx1 = s_weight[right];
+                float sy0 = s_weight[bottom];
+                float sy1 = s_weight[top];
                 float s_sum = sx0 + sx1 + sy0 + sy1;
 
                 if(s_sum == 0.0){
@@ -404,7 +404,7 @@ void FluidSolver::makeIncompressible(const int numIters, const float dt, const f
 void FluidSolver::runFrameSimulation(const float dt, const float g, const float flipCoef,
                                 const int numPressureIters,
                                 const int numParticleIters) {
-    int numSubSteps = 2;
+    int numSubSteps = 1;
     float sdt = dt / static_cast<float>(numSubSteps);
 
     for(int step = 0; step < numSubSteps; ++step){
@@ -416,8 +416,8 @@ void FluidSolver::runFrameSimulation(const float dt, const float g, const float 
         //updateParticleDensity();
         //makeIncompressible(numPressureIters, sdt);
         transferVelocitiesToParticles(flipCoef);
-        integrateParticles(sdt, g);
-        pushParticlesApart(numParticleIters);
+        integrateParticles(dt/2.0f, g);
+        pushParticlesApart(10);
         handleParticleCollisions();
     }
 }
@@ -439,7 +439,7 @@ FluidSolver::FluidSolver(const float dens, const float width, const float height
     u_prev = std::vector<float>(numCells, 0.0f);
     v_prev = std::vector<float>(numCells, 0.0f);
     p = std::vector<float>(numCells, 0.0f);
-    s = std::vector<float>(numCells, 0.0f);
+    s_weight = std::vector<float>(numCells, 0.0f);
     cellType = std::vector<int>(numCells, 0);
 
     particlePos = std::vector<float>(2 * maxParticles, 0.0f);
@@ -472,7 +472,7 @@ void FluidSolver::setUpParticlesAndCells(const int particleAmount, std::vector<f
             if(i == 0 || i == numX-1 || j == 0){
                 s_val = 0.0; //твёрдая граница
             }
-            s[i * n + j] = s_val;
+            s_weight[i * n + j] = s_val;
         }
     }
 }
@@ -717,8 +717,8 @@ void FluidSolver::pressureSolve(const float dt) {
 
     // начинаем главный итерационный процесс (критерий оставнова - достигнутая точность)
     bool converged = false;
-    int PCG_MAX_ITERS = 10000;
-    double PCG_TOL = 1e-3;
+    int PCG_MAX_ITERS = 100000;
+    double PCG_TOL = 1e-8;
     for(int iters=0; iters < PCG_MAX_ITERS; ++iters){
         applyA(z, s, Adiag, Ax, Ay);
         double alpha = sigma / dot(z, s, numX, numY);

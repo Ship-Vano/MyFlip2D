@@ -38,7 +38,7 @@ class FluidSolver {
     std::vector<float> u_prev;//size = numCellss
     std::vector<float> v_prev;//size = numCellss
     std::vector<float> p;//size = numCellss
-    std::vector<float> s;//size = numCellss
+    std::vector<float> s_weight;//size = numCellss
     std::vector<int> cellType;//size = numCellss
     std::vector<float> pressure; // size=numCells
     //std::vector<float> densities; //size = numCells
