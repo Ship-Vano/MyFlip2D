@@ -9,17 +9,14 @@
 #include <vector>
 #include <cmath>
 #include <cassert>
+#include <climits>
 
 
-struct Particle{
-    float x;
-    float y;
-    float u;
-    float v;
-    //TODO: add affine C for APIC
-};
+const int VEL_UNKNOWN = INT_MIN;
 
 class FluidSolver {
+
+    float alpha = 1.0f;
 
     float density;
 
@@ -46,7 +43,7 @@ class FluidSolver {
 
     // частицы
     int maxParticles;
-    std::vector<Particle> particles;
+//    std::vector<Particle> particles;
     std::vector<float> particlePos; //2*maxParticles; //x1,y1, x2,y2, x3,y3, .....
     //std::vector<float> particleColor; //3*maxParticles; //r1,g1,b1, r2,g2,b2, ....
     std::vector<float> particleVel; //2*maxParticles; //u1,v1, u2,v2, u3,v3, ...
@@ -72,6 +69,16 @@ class FluidSolver {
     void pushParticlesApart(const int numIters);
     void transferVelocitiesToGrid();
     void updateParticleDensity();
+    double hatFunction(double r);
+    double trilinearHatKernel(double dist_x, double dist_y, double h);
+    std::vector<float> getGridCellPosition(float i, float j, float dx);
+    void particlesToGrid();
+    void saveVelocityGrids();
+    void gridToParticles();
+    std::vector<int> getGridCellIndex(std::vector<float>& pos, float dx);
+    std::vector<float> interpVel(std::vector<float> uGrid, std::vector<float> vGrid, std::vector<float> pos);
+    std::vector<int> checkNeighbours(std::vector<int>& grid, int dim[2], int index[2], int neighbors[][2], int numNeighbours, int value);
+    void extrapolateGridFluidData(std::vector<float>& grid, int x, int y, int depth);
     void pressureSolve(const float dt);
     void applyPrecon(std::vector<double>& z, std::vector<double>& r, std::vector<double>& precon, std::vector<double>& Adiag,  std::vector<double>& Ax, std::vector<double>& Ay);
     void applyPressure(const float& dt);
@@ -93,5 +100,12 @@ public:
                        const std::string outputFileName);
 };
 
+struct Particle{
+    float x;
+    float y;
+    float u;
+    float v;
+    //TODO: add affine C for APIC
+};
 
 #endif //MYFLIP2D_FLUIDSOLVER_H

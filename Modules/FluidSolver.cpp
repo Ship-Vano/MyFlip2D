@@ -2,10 +2,13 @@
 // Created by Иван on 11/17/2024.
 //
 
+
 #include "FluidSolver.h"
 
 
 // SIMULATE PARTICLES
+
+
 
 //void (){
 //
@@ -142,15 +145,15 @@ void FluidSolver::pushParticlesApart(const int numIters){
 void FluidSolver::transferVelocitiesToGrid() {
     int n = numY;
     float h1 = h_inv;
-    float h2 = 0.5 * h;
+    float h2 = 0.5f * h;
 
     u_prev.swap(u);
     v_prev.swap(v);
 
-    std::fill(du.begin(), du.end(), 0.0);
-    std::fill(dv.begin(), dv.end(), 0.0);
-    std::fill(u.begin(), u.end(), 0.0);
-    std::fill(v.begin(), v.end(), 0.0);
+    std::fill(du.begin(), du.end(), 0.0f);
+    std::fill(dv.begin(), dv.end(), 0.0f);
+    std::fill(u.begin(), u.end(), 0.0f);
+    std::fill(v.begin(), v.end(), 0.0f);
 
     // ОПРЕДЕЛЯЕМ ТИП ЯЧЕЙКИ
     for(int i = 0; i < numCells; ++i){
@@ -409,15 +412,23 @@ void FluidSolver::runFrameSimulation(const float dt, const float g, const float 
 
     for(int step = 0; step < numSubSteps; ++step){
         relabel();
-        transferVelocitiesToGrid(); //P2G
-        applyBodyForces(dt, g);
+        particlesToGrid();
+        //transferVelocitiesToGrid(); //P2G
+        extrapolateGridFluidData(u, numX, numY, 2);
+        extrapolateGridFluidData(v, numX, numY, 2);
+        saveVelocityGrids();
+        applyBodyForces(sdt, g);
         pressureSolve(dt);
         applyPressure(dt);
         //updateParticleDensity();
         //makeIncompressible(numPressureIters, sdt);
+        gridToParticles();
         transferVelocitiesToParticles(flipCoef);
-        integrateParticles(dt/2.0f, g);
-        pushParticlesApart(10);
+        extrapolateGridFluidData(u, numX, numY, numX);
+        extrapolateGridFluidData(v, numX, numY, numY);
+        //TODO: advectParticles(ADVECT-MAX);
+        integrateParticles(sdt, g);
+        //pushParticlesApart(numSubSteps);
         handleParticleCollisions();
     }
 }
@@ -483,6 +494,9 @@ void FluidSolver::runSimulation(const float dt, const float g, const float flipC
     std::ofstream file(outputFileName);
     assert(file.is_open());
     for(int frame = 0; frame < numFrames; ++frame){
+        if(frame) {
+            std::cout << "frame = " << frame << std::endl;
+        }
         runFrameSimulation(dt, g, flipCoef, numPressureIters, numParticleIters);
         // запись состояния
         writeVectorToFile(file, particlePos);
@@ -523,6 +537,308 @@ void FluidSolver::applyBodyForces(const float dt, const float g){
             v[i * numY + j] += dt * g;
         }
     }
+}
+
+void FluidSolver::particlesToGrid(){
+//    u_prev.swap(u);
+//    v_prev.swap(v);
+    // стираем все значения скоростей в ячейках
+    std::fill(u.begin(), u.end(), 0.0f);
+    std::fill(v.begin(), v.end(), 0.0f);
+
+    // для каждой компоненты скорости в каждой жидкой ячейке
+    // будем вычислять взвешенное среднее от частиц в еёё окрестности,
+    // используя функцию-ядро, а затем задавать эту скорость в ячейке
+
+    // сюда будем собирать компоненты для умножения и деления (при вычислении средних)
+    std::vector<double> uNum(numCells, 0.0f);
+    std::vector<double> uDen(numCells, 0.0f);
+    std::vector<double> vNum(numCells, 0.0f);
+    std::vector<double> vDen(numCells, 0.0f);
+
+    // проходимся по всем частицам и вычисляем Num'ы и Den'ы
+    for(int p=0; p < numParticles; ++p){
+        float px = particlePos[2*p];
+        float py = particlePos[2*p+1];
+        float pu = particleVel[2*p];
+        float pv = particleVel[2*p + 1];
+        for(int i = 0; i < numX; ++i){
+            for(int j=0; j<numY; ++j){
+                if(j < numY){
+                    std::vector<float> gridCellPos = getGridCellPosition(i - 0.5f, j, h);
+                    double sub_x = gridCellPos[0] - px;
+                    double sub_y = gridCellPos[1] - py;
+                    double kernel = trilinearHatKernel(sub_x, sub_y, h);
+                    uNum[i * numY + j] += pu * kernel;
+                    uDen[i*numY + j] += kernel;
+                }
+                if(i < numX){
+                    std::vector<float> gridCellPos = getGridCellPosition(i, j - 0.5f, h);
+                    double sub_x = gridCellPos[0] - px;
+                    double sub_y = gridCellPos[1] - py;
+                    double kernel = trilinearHatKernel(sub_x, sub_y, h);
+                    vNum[i * numY + j] += pv * kernel;
+                    vDen[i*numY + j] += kernel;
+                }
+            }
+        }
+    }
+
+    for(int i = 0; i < numX; ++i){
+        for(int j=0; j<numY; ++j) {
+            if (j < numY) {
+                if(uDen[i*numY + j] != 0.0){
+                    u[i*numY + j] = uNum[i*numY + j] / uDen[i*numY + j];
+                }
+            }
+            if (i < numX) {
+                if(vDen[i*numY + j] != 0.0){
+                    v[i*numY + j] = vNum[i*numY + j] / vDen[i*numY + j];
+                }
+            }
+        }
+    }
+
+}
+
+double FluidSolver::hatFunction(double r){
+    double rAbs = std::abs(r);
+    if(rAbs <= 1.0) {
+        return 1.0 - rAbs;
+    } else{
+        return 0.0;
+    }
+}
+double FluidSolver::trilinearHatKernel(double dist_x, double dist_y, double h_dx){
+    return hatFunction(dist_x / h_dx ) * hatFunction(dist_y / h_dx);
+}
+
+std::vector<float> FluidSolver::getGridCellPosition(float i, float j, float dx){
+    std::vector<float> pos{i*dx + 0.5f*dx, j*dx + 0.5f*dx};
+    return pos;
+}
+
+std::vector<int> FluidSolver::getGridCellIndex(std::vector<float>& pos, float dx){
+    std::vector<int> index{(int)(pos[0]/dx), (int)(pos[1]/dx)};
+    return index;
+}
+
+/*
+ Экстраопляция данных в жидкие ячейки для данной сетки,
+ используется breadth-first способ поиска (поиск вширину)
+  Пусть задан граф G = ( V , E ) {\displaystyle G=(V,E)}
+  и выделена исходная вершина s {\displaystyle s}.
+  Алгоритм поиска в ширину систематически обходит
+  все ребра G {\displaystyle G} для «открытия» всех вершин,
+  достижимых из s {\displaystyle s},
+  вычисляя при этом расстояние (минимальное количество рёбер)
+  от s {\displaystyle s} до каждой достижимой
+  из s {\displaystyle s} вершины.
+  Алгоритм работает как для ориентированных, так и для неориентированных графов.
+ --
+    Аргументы:  grid  - сетка (напр, сетка скоростей u)
+                x     - размер по x
+                y     - размер по y
+                depth - число ячеек на удалении от жидких ячеек для экстраполирования
+ * */
+void FluidSolver::extrapolateGridFluidData(std::vector<float>& grid, int x, int y, int depth){
+    // инициализация массива флагов (маркеров)
+    std::vector<int> d(numCells, 0);
+    // d = 0 <-> известная величина
+    // d = max_int <-> неизвестная величина
+    for(int i=0; i < x; ++i){
+        for(int j=0; j<y; ++j){
+            if(grid[i*y + j] != VEL_UNKNOWN){
+                d[i*y + j] = 0;
+            }else{
+                d[i*y + j] = INT_MAX;
+            }
+        }
+    }
+
+    /*
+     * The wavefront expansion algorithm is a specialized potential field path planner
+     * with breadth-first search to avoid local minima.
+     * It uses a growing circle around the robot.
+     * The nearest neighbors are analyzed first and then the radius of the circle
+     * is extended to distant regions.
+     * */
+    // определение соседей
+    int numNeighbors = 8;
+    int neighbors[8][2] = {
+            {-1, 1}, // top left
+            {-1, 0}, // middle left
+            {-1, -1}, // bottom left
+            {0, 1}, // top middle
+            {0, -1}, // bottom middle
+            {1, 1}, // top right
+            {1, 0}, // middle right
+            {1, -1} // bottom right
+    };
+
+    //определяем первый волновой фронт
+    std::vector<std::vector<int>> W;
+    int dim[2] = {x, y};
+    for(int i = 0; i < x; ++i){
+        for(int j =0; j < y; ++j){
+            //текущее значение неизвестно
+            if(d[i*y + j] != 0){
+                int ind[2] = {i, j};
+                if(!checkNeighbours(d, dim, ind, neighbors, numNeighbors, 0).empty()){
+                    //сосед известен
+                    d[i*y + j] = 1;
+                    std::vector<int> tmp{i , j};
+                    W.push_back(tmp);
+                }
+            }
+        }
+    }
+
+    //создаём список всех wavefront'ов заданной глубины
+    std::vector<std::vector<std::vector<int>>> wavefronts;
+    wavefronts.push_back(W);
+    int curWave = 0;
+    while(curWave < depth){
+        // get wavefront
+        std::vector<std::vector<int>> curW = wavefronts.at(curWave);
+        // инициализация следующего
+        std::vector<std::vector<int>> nextW;
+        // проходимся по текущему curW и эксраполируем значения
+        for(int i =0; i < curW.size(); ++i){
+            std::vector<int> ind = curW.at(i);
+            //среднее по соседям
+            float avg = 0.0f;
+            int numUsed = 0;
+            for(int j = 0; j < numNeighbors; ++j){
+                int offsetX = neighbors[i][0];
+                int offsetY = neighbors[i][1];
+                int neighborX = ind[0] + offsetX;
+                int neighborY = ind[1] + offsetY;
+
+                // проверяем, что все индексы валидны
+                if ((neighborX >= 0 && neighborX < dim[0]) && (neighborY >= 0 && neighborY < dim[1])) {
+                    //хотим добавлять среднее только если сосед d меньше текущего d
+                    if (d[neighborX * y + neighborY] < d[(int)ind[0] * y + (int)ind[1]]) {
+                        avg += grid[neighborX * y + neighborY];
+                        numUsed++;
+                    } else if (d[neighborX * y + neighborY] == INT_MAX) {
+                        d[neighborX * y + neighborY] = d[(int)ind[0] * y + (int)ind[1]] + 1;
+                        std::vector<int> tmp{neighborX, neighborY};
+                        nextW.push_back(tmp);
+                    }
+                }
+            }
+
+            avg /= (float)numUsed;
+            // текущее значение теперь среднее от соседей
+            grid[(int)ind[0] * y + (int)ind[1]] = avg;
+        }
+
+        // записываем следующее значение в общий лист
+        wavefronts.push_back(nextW);
+        curWave++;
+    }
+}
+
+/*
+ * ПРоверяем соседей ячейки с индексом для заданного значения.
+ * Возвращает вектор индексов соседей (индекс строки в заданном массиве соседей),
+ * которые содержат заданное значение.
+ * grid - сетка, в которой ищем
+ * dim - размерность сетки по x и по y
+ * index - (i,j)-индекс ячейки, вокруг которой ищем
+ * neighbours - определение соседей: (n x 2)-массив, где каждая строка это пара сдвигов (offsets) от корневого индекса (вокруг которого ищем)
+ * numNeighbours - число соседей
+ * value - значение, которое ищем
+ * */
+std::vector<int> FluidSolver::checkNeighbours(std::vector<int>& grid, int dim[2], int index[2], int neighbors[][2], int numNeighbours, int value){
+    std::vector<int> neighborsTrue;
+    for (int i = 0; i < numNeighbours; ++i) {
+        int offsetX = neighbors[i][0];
+        int offsetY = neighbors[i][1];
+        int neighborX = index[0] + offsetX;
+        int neighborY = index[1] + offsetY;
+
+        // make sure valid indices
+        if ((neighborX >= 0 && neighborX < dim[0]) && (neighborY >= 0 && neighborY < dim[1])) {
+            if (grid[neighborX * dim[1] + neighborY] == value) {
+                neighborsTrue.push_back(i);
+            }
+        }
+    }
+
+    return neighborsTrue;
+}
+
+void FluidSolver::gridToParticles() {
+    // записываем разности полей скоростей для FLIP
+    // считаем u
+    for(int i = 0; i < numX; ++i){
+        for(int j=0; j <numY; ++j){
+            du[i*numY + j] = u[i*numY + j] - u_prev[i*numY + j];
+            dv[i*numY + j] = v[i*numY + j] - v_prev[i*numY + j];
+        }
+    }
+
+    //проходимся по частицам и интерполируем каждую компоненту скорости
+    for(int i = 0; i < numParticles; ++i){
+        float px = particlePos[2*i];
+        float py = particlePos[2*i + 1];
+        float pu = particleVel[2*i];
+        float pv = particleVel[2*i + 1];
+        std::vector<float> pos{px, py};
+        std::vector<float> pvel{pu, pv};
+        std::vector<float> picInterp = interpVel(u, v, pos);
+        std::vector<float> flipInterp = interpVel(du, dv, pos);
+        std::vector<float> newVel = add(scale(picInterp, alpha), scale(add(pvel, flipInterp), 1.0f - alpha));
+        particleVel[2*i] = newVel[0];
+        particleVel[2*i + 1] = newVel[1];
+    }
+}
+
+/*
+ *
+ * */
+std::vector<float> FluidSolver::interpVel(std::vector<float> uGrid, std::vector<float> vGrid, std::vector<float> pos){
+    std::vector<int> cell = getGridCellIndex(pos, h);
+    int i = cell[0];
+    int j = cell[1];
+
+    // проверка на корректный индекс
+    if(i >= 0 && i < numX && j >= 0 && j < numY){
+        // получить позиции u и v компонент внутри ячейки
+        std::vector<float> cellLoc = getGridCellPosition(i, j, h);
+        float offset = h / 2.0f;
+        float x1 = cellLoc[0] - offset;
+        float x2 = cellLoc[0] + offset;
+        float y1 = cellLoc[1] - offset;
+        float y2 = cellLoc[1] + offset;
+        // получить от позиций значения
+        float u1 = uGrid[i*numY + j];
+        float u2 = uGrid[(i+1)*numY + j];
+        float v1 = vGrid[i*numY + j];
+        float v2 = uGrid[i*numY + (j+1)];
+
+        // интерполированные значения
+        float u_interp = ((x2 - pos[0]) / (x2 - x1)) * u1 + ((pos[0] - x1) / (x2 - x1)) * u2;
+        float v_interp = ((y2 - pos[1]) / (y2 - y1)) * v1 + ((pos[1] - y1) / (y2 - y1)) * v2;
+        std::vector<float> tmp{u_interp, v_interp};
+        return tmp;
+    }else{
+        std::vector<float> tmp{VEL_UNKNOWN, VEL_UNKNOWN};
+        return tmp;
+    }
+}
+
+void FluidSolver::saveVelocityGrids(){
+    //save u grid //TODO: u from i(0 to numX + 1) j(o to numY) and for v vice versa
+    for (int i = 0; i < numX; ++i) {
+        for (int j = 0; j < numY; ++j) {
+            u_prev[i*numY + j] = u[i*numY + j];
+            v_prev[i*numY + j] = v[i*numY + j];
+        }
+    }
+    //save v grid
 }
 
 void FluidSolver::pressureSolve(const float dt) {
@@ -717,8 +1033,8 @@ void FluidSolver::pressureSolve(const float dt) {
 
     // начинаем главный итерационный процесс (критерий оставнова - достигнутая точность)
     bool converged = false;
-    int PCG_MAX_ITERS = 100000;
-    double PCG_TOL = 1e-8;
+    int PCG_MAX_ITERS = 200;
+    double PCG_TOL = 1e-6;
     for(int iters=0; iters < PCG_MAX_ITERS; ++iters){
         applyA(z, s, Adiag, Ax, Ay);
         double alpha = sigma / dot(z, s, numX, numY);

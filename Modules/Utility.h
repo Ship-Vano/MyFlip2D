@@ -22,6 +22,10 @@ enum VELOCITY_TYPE{
     V_FIELD = 1
 };
 
+std::vector<float> scale(const std::vector<float>& vec1, const float scalar);
+
+std::vector<float> add(const std::vector<float>& vec1, const std::vector<float>& vec2);
+
 template<typename DT>
 DT clamp(const DT x, const DT min, const DT max) {
     if(x < min){
@@ -64,5 +68,6 @@ T max(std::vector<T> grid1, int size_x, int size_y) {
 
     return maxVal;
 }
+
 
 #endif //MYFLIP2D_UTILITY_H

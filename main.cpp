@@ -1,15 +1,15 @@
 #include "Modules/FluidSolver.h"
 
 int main() {
-    int task_type = 1;
-    float gravity = -9.81f;
+    int task_type = 0;
+    float gravity = -5.81f;
     float dt = 1.0f / 60.0f;
     float flipCoef = 0.5f;
     int numPressureIters = 100;
-    int numParticleIters = 1;
+    int numParticleIters = 2;
     //float overRelaxation = 1.9;
     float simHeight = 720.0f;
-    float simWidth = 1280.0f;
+    float simWidth = 720.0f;
     float resolution = 100.0f;
     float hh = simHeight / resolution;
     float rho = 1000.0f;
@@ -17,7 +17,8 @@ int main() {
     float relWaterWidth = 0.6f;
     float partRadius = 0.3f * hh;
     float dx = 2.0f * partRadius;
-    float dy = std::sqrt(3.0f)/2.0f * dx;
+    float dy = dx;
+    //float dy = std::sqrt(3.0f)/2.0f * dx;
 
     if(task_type == 0){
         int numParticlesX = std::floor( (relWaterWidth * simWidth - 2.0 * hh - 2.0 * partRadius) / dx );
@@ -40,7 +41,7 @@ int main() {
 
         solver.setUpParticlesAndCells(maxSimParticles, particlePositions);
 
-        solver.runSimulation(dt, gravity, flipCoef, 720,
+        solver.runSimulation(dt, gravity, flipCoef, 2000,
                              numPressureIters, numParticleIters, "OutputData/res.txt");
     }
     else if(task_type == 1){
@@ -96,6 +97,8 @@ int main() {
 
         // Обновляем количество частиц
         int maxSimParticles = particlePositions.size() / 2;
+        std::cout << "particles = " << maxSimParticles  << std::endl;
+        std::cout << "dx = " << dx << " dy = " << dy << std::endl;
 
         // Создаем солвер с актуальным количеством частиц
         FluidSolver solver(rho, simWidth, simHeight, hh, partRadius, maxSimParticles);
