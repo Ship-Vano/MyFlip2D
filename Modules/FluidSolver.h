@@ -16,7 +16,7 @@ const int VEL_UNKNOWN = INT_MIN;
 
 class FluidSolver {
 
-    float alpha = 1.0f;
+    float alpha = 0.5f;
 
     float density;
 

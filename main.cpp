@@ -2,7 +2,7 @@
 
 int main() {
     int task_type = 0;
-    float gravity = -5.81f;
+    float gravity = -9.81f;
     float dt = 1.0f / 60.0f;
     float flipCoef = 0.5f;
     int numPressureIters = 100;

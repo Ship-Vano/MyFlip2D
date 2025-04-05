@@ -16,7 +16,7 @@
 
 void FluidSolver::integrateParticles(float dt, float g) {
     for(int i = 0; i < numParticles; ++i){
-//        particleVel[2 * i + 1] += dt * g; //добавляем гравитацию
+        particleVel[2 * i + 1] += dt * g; //добавляем гравитацию
         particlePos[2 * i] += particleVel[2 * i] * dt; // перенос по x
         particlePos[2 * i + 1] += particleVel[2 * i + 1]*dt; // перенос по y
     }
@@ -413,17 +413,13 @@ void FluidSolver::runFrameSimulation(const float dt, const float g, const float 
     for(int step = 0; step < numSubSteps; ++step){
         relabel();
         particlesToGrid();
-        //transferVelocitiesToGrid(); //P2G
         extrapolateGridFluidData(u, numX, numY, 2);
         extrapolateGridFluidData(v, numX, numY, 2);
         saveVelocityGrids();
         applyBodyForces(sdt, g);
         pressureSolve(dt);
         applyPressure(dt);
-        //updateParticleDensity();
-        //makeIncompressible(numPressureIters, sdt);
         gridToParticles();
-        transferVelocitiesToParticles(flipCoef);
         extrapolateGridFluidData(u, numX, numY, numX);
         extrapolateGridFluidData(v, numX, numY, numY);
         //TODO: advectParticles(ADVECT-MAX);
@@ -533,7 +529,7 @@ void FluidSolver::applyBodyForces(const float dt, const float g){
     //явный метод Эйлера
     for(int i = 0; i < numX; ++i){
         for(int j=0; j < numY; ++j){
-            //u[i * pNumX + j] += 0.0; += dt*GRAVITY.X
+            //u[i * numY+ j] += 0.0; += dt*GRAVITY.X
             v[i * numY + j] += dt * g;
         }
     }
